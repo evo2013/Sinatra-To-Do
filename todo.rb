@@ -3,6 +3,10 @@ require "sinatra/reloader" if development?
 require "sinatra/content_for"
 require "tilt/erubis"
 
+configure do 
+  set :erb, :escape_html => true
+end
+
 configure do
   enable :sessions
   set :session_secret, 'secret'
@@ -77,6 +81,15 @@ def error_for_todo(name)
   end
 end
 
+def load_list(index)
+  list = session[:lists][index] if index
+  return list if list
+
+  session[:error] = "The specified list was not found."
+  redirect "/lists"
+  halt
+end
+
 # create new list
 post '/lists' do
   list_name = params[:list_name].strip
@@ -92,16 +105,17 @@ post '/lists' do
   end
 end
 
+#View a single todo list
 get "/lists/:id" do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   erb :list, layout: :layout
 end
 
 # Edit existing todo list
 get "/lists/:id/edit" do
   id = params[:id].to_i
-  @list = session[:lists][id]
+  @list = load_list(id)
   erb :edit_list, layout: :layout
 end
 
@@ -109,7 +123,7 @@ end
 post "/lists/:id" do
   list_name = params[:list_name].strip
   id = params[:id].to_i
-  @list = session[:lists][id]
+  @list = load_list(id)
 
   error = error_for_list_name(list_name)
   if error
@@ -127,13 +141,13 @@ post "/lists/:id/destroy" do
   id = params[:id].to_i
   session[:lists].delete_at(id)
   session[:success] = "The list has been deleted."
-  redirect "/lists"
+  "/lists"
 end
 
-# Add a new todo to a list_name
+# Add a new todo to a list_
 post "/lists/:list_id/todos" do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   text = params[:todo].strip
 
   error = error_for_todo(text)
@@ -150,18 +164,17 @@ end
 # Delete a todo from a list
 post "/lists/:list_id/todos/:id/destroy" do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
 
   todo_id = params[:id].to_i
   @list[:todos].delete_at todo_id
-  session[:success] = "The todo has been deleted."
-  redirect "/lists/#{@list_id}"
+  "OK"
 end
 
 # Update the status of a todo
 post "/lists/:list_id/todos/:id" do
   @list_id = params[:list_id].to_i
-  @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
 
   todo_id = params[:id].to_i
   is_completed = params[:completed] == "true"
@@ -174,8 +187,8 @@ end
 # Mark all todos as complete for a list
 post "/lists/:id/complete_all" do
   @list_id = params[:id].to_i
-  @list = session[:lists][@list_id]
-
+  # @list = session[:lists][@list_id]
+  @list = load_list(@list_id)
   @list[:todos].each do |todo|
     todo[:completed] = true
   end
